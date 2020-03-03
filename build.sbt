@@ -11,6 +11,7 @@ libraryDependencies ++= Dependencies.fandtpools
 scalacOptions ++= List(
   "-unchecked",
   "-deprecation",
+  "-Xlint",
   "-language:_",
   "-encoding", "UTF-8"
 )
