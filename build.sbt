@@ -1,4 +1,4 @@
-organization := "com.cronos"
+organization := "com.lunatech"
 
 name := "FuturesAndThreadPools"
 

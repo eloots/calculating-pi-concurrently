@@ -1,45 +1,82 @@
 Introduction
 ============
 
-With the prevalence of multi-CPU computers and multi-core CPUs, the opportunity exists to speed-up the execution of applications in general and algorithms that lend themselves to parallelisation specifically.
+With the prevalence of multi-CPU computers and multi-core CPUs, the opportunity
+exists to speed-up the execution of applications in general and specifically
+algorithms that lend themselves to parallelisation.
 
-If we look at the latter, we may find that the algorithm can be decomposed in subtasks which can be executed in parallel. Getting the final result then consists of combining the sub-results of the subtasks. There we can distinguish two cases. In the first case, the order in which the sub-results are composed doesn't matter, whereas in the second case, it does.
+If we look at the latter, we may find that the algorithm can be decomposed in
+subtasks which can be executed in parallel. Getting the final result then
+consists of combining the sub-results of the subtasks. There we can distinguish
+two cases. In the first case, the order in which the sub-results are composed
+doesn't matter, whereas in the second case, it does.
 
-An example of the first case is when the sub-results are numbers and the final result is their sum. Obviously, the order in which the numbers are added doesn't change the result (to be complete, effects of rounding due to finite precision _can_ impact the final result, but that's an interesting but entirely different topic). An example where order definitely matters is if we multiply a series of matrices: if we split the multiplication into groups, calculate the product of the matrices in each group, then the order in which we combine the sub-results _does_ matter!
+An example of the first case is when the sub-results are numbers and the final
+result is their sum. Obviously, the order in which the numbers are added doesn't
+change the result (to be complete, effects of rounding due to finite precision
+_can_ impact the final result, but that's an interesting but entirely different
+topic). An example where order definitely matters is if we multiply a series of
+matrices: if we split the multiplication into groups, calculate the product of
+the matrices in each group, then the order in which we combine the sub-results
+_does_ matter!
 
-In Scala, we have different tools available to write applications that execute code concurrently, and if we execute this code on a multi-CPU or multi-core computer, we can achieve parallelism in the execution of this code.
+In Scala, we have different tools available to write applications that execute
+code concurrently, and if we execute this code on a multi-CPU or multi-core
+computer, we can achieve parallelism in the execution of this code.
 
-A first tool we have is Akka: Akka allows us to create so-called Actors that can execute code. This execution can be triggered by sending an Actor a message. In the context of concurrent execution of code, we can imagine a system where we create a pool of Actors that execute code concurrently. This execution model allows us to implement concurrent execution of sub-tasks that fall in the first category mentioned earlier: unless we take specific measures, we have no control over the order in which sub-results are returned. Conclusion is that the Actor model can be applied in a straightforward way to problems of the first type.
+A first tool we have is Akka: Akka allows us to create so-called Actors that can
+execute code. This execution can be triggered by sending an Actor a message. In
+the context of concurrent execution of code, we can imagine a system where we
+create a pool of Actors that execute code concurrently. This execution model
+allows us to implement concurrent execution of sub-tasks that fall in the first
+category mentioned earlier: unless we take specific measures, we have no control
+over the order in which sub-results are returned. Conclusion is that the Actor
+model can be applied in a straightforward way to problems of the first type.
 
-A second tool we have at our disposal is Scala's ```Future```. This API allows us to tackle both of the aforementioned cases.
+A second tool we have at our disposal is Scala's `Future`. This API allows
+us to tackle both of the aforementioned cases.
 
-Let's see how `Future` can be used to implement a parallelised computation of the number π .
+Let's see how `Future` can be used to implement a parallelised computation of
+the number π.
 
 Calculating π
 =============
 
-Ok, this topic certainly has been beaten to death, but it's easy to understand, so we may just as well use it for demonstration purposes...
+Ok, this topic certainly has been beaten to death, but it's easy to understand,
+so we may just as well use it for demonstration purposes...
 
-First we need an algorithm to calculate π. I chose the [_Bailey–Borwein–Plouffe formula_](https://en.wikipedia.org/wiki/Bailey–Borwein–Plouffe_formula) _(BBP)_ discovered in 1995 by _Simon Plouffe_ :
+First we need an algorithm to calculate π. I chose the [_Bailey–Borwein–Plouffe
+formula_](https://en.wikipedia.org/wiki/Bailey–Borwein–Plouffe_formula) _(BBP)_
+discovered in 1995 by _Simon Plouffe_ :
 
 ![BBP digit extraction algorithm](images/Pi-formula.png)
 
-This algorithm has a very interesting property (that we won't exploit in our case): if the calculation is performed in hexadecimal number base, the algorithm can produce any individual digit of π without calculating all the digits preceding it! In this way, it is often used as a mechanism to verify the correctness of the calculated value of π using a different algorithm.
+This algorithm has a very interesting property (that we won't exploit in our
+case): if the calculation is performed in hexadecimal number base, the algorithm
+can produce any individual digit of π without calculating all the digits
+preceding it! In this way, it is often used as a mechanism to verify the
+correctness of the calculated value of π using a different algorithm.
 
 Let's have a look at how we implement the calculation of π using `Future`.
 
 On precision
 ------------
 
-Obviously, if we calculate an approximation of π by calculating the sum of the `N` first terms of the _BBP_ formula shown earlier, we must calculate each term with sufficient precision. If we would perform the calculation using `Double`, we wouldn't be able to calculate many digits... 
+Obviously, if we calculate an approximation of π by calculating the sum of the
+`N` first terms of the _BBP_ formula shown earlier, we must calculate each term
+with sufficient precision. If we would perform the calculation using `Double`,
+we wouldn't be able to calculate many digits...
 
-Let's use `BigDecimal` instead. `BigDecimal` allows us to create numbers of practically arbitrary precision specified in a so-called MathContext. Let's create some numbers with 100 digit precision and perform a calculation with them:
+Let's use `BigDecimal` instead. `BigDecimal` allows us to create numbers of
+practically arbitrary precision specified in a so-called MathContext. Let's
+create some numbers with 100 digit precision and perform a calculation with
+them:
 
-```
+```scala
 scala> import java.math.{ MathContext => MC }
 import java.math.{MathContext=>MC}
 
-scala> implicit val mc = new MC(100)
+scala> val mc = new MC(100)
 mc: java.math.MathContext = precision=100 roundingMode=HALF_UP
 
 scala> val one = BigDecimal(1)(mc)
@@ -52,9 +89,12 @@ scala> println((one/seven).toString)
 0.1428571428571428571428571428571428571428571428571428571428571428571428571428571428571428571428571429
 ```
 
-Each time we create a `BigDecimal` number we need to specify the required precision by supplying the corresponding MathContext. A bit clumsy, so let's start by a 'workaround' such that we use `BigDecimal` in a more straightforward way:
+Each time we create a `BigDecimal` number we need to specify the required
+precision by supplying the corresponding MathContext. A bit clumsy, so let's
+start by a 'workaround' utilizing implicits such that we use `BigDecimal` in a
+more straightforward way:
 
-```
+```scala
 scala> import java.math.{ MathContext => MC }
 import java.math.{MathContext=>MC}
 
@@ -79,22 +119,40 @@ scala> println((one/seven).toString)
 0.1428571428571428571428571428571428571428571428571428571428571428571428571428571428571428571428571429
 ```
 
-If you're unfamiliar with Scala's implicits, the above may look a bit strange. In fact it works as follows: in object `BigDecimal`, we define an apply method that has two argument lists. The purpose of the first one is obvious. The second one takes a single argument, namely a `MathContext`. This argument (in fact, this applies to the argument list as a whole) is marked implicit. What this will do is that the compiler will, in the current execution context, look for a value of type `MC` marked as implicit. The declaration `implicit val mc = new MC(100)` meets that criterium. Hence, when we invoke a call to the apply method in our `BigDecimal` object, value `mc` will automatically be passed as the second argument.
+If you're unfamiliar with Scala's implicits, the above may look a bit strange.
+In fact it works as follows: in object `BigDecimal`, we define an apply method
+that has two argument lists. The purpose of the first one is obvious. The second
+one takes a single argument, namely a `MathContext`. This argument (in fact,
+this applies to the argument list as a whole) is marked implicit. What this will
+do is that the compiler will, in the current execution context, look for a value
+of type `MC` marked as implicit. The declaration `implicit val mc = new MC(100)`
+meets that criterium. Hence, when we invoke a call to the apply method in our
+`BigDecimal` object, value `mc` will automatically be passed as the second
+argument.
 
-The attentive user will also note that our apply method takes a `Double` as argument. Later on we use our apply method with an `Int` as argument. This works because there exists what is called an _implicit conversion_ from `Int` to `Double`.
+The attentive user will also note that our apply method takes a `Double` as
+argument. Later on we use our apply method with an `Int` as argument. This works
+because there exists what is called an _implicit conversion_ from `Int` to
+`Double`.
 
-Cool, and now that we've got that out of the way, let's look at how we can perform the calculation.
+Cool, and now that we've got that out of the way, let's look at how we can
+perform the calculation.
 
 Implementing the BBP digit extraction algorithm
 -----------------------------------------------
 
-An obvious way to parallelize the calculation of the BPP formula shown above up to N terms is to split the terms into `nChunks` chunks and to calculate the sum of the terms in the chunks in parallel. When that's done, the final result (π) is the sum of the partial sums.
+An obvious way to parallelize the calculation of the BPP formula shown above up
+to N terms is to split the terms into `nChunks` chunks and to calculate the sum
+of the terms in the chunks in parallel. When that's done, the final result (π)
+is the sum of the partial sums.
 
-For each chunk, we need to know its offset in the sequence of terms. Let's generate a sequence that contains the offsets of the respective chunks for a given `N` and `nChunks`. Note that the latter may not divide entirely into the former, so we do a bit of rounding that may result in calculating extra terms:
+For each chunk, we need to know its offset in the sequence of terms. Let's
+generate a sequence that contains the offsets of the respective chunks for a
+given `N` and `nChunks`. Note that the latter may not divide entirely into the
+former, so we do a bit of rounding that may result in calculating extra terms:
 
-```
-scala> val N = 3000
-N: Int = 3000
+```scala
+scala> val N = 3000 N: Int = 3000
 
 scala> val nChunks = 64
 nChunks: Int = 64
@@ -109,45 +167,59 @@ scala> println(s"Calculating π with ${nChunks*chunkSize} terms in $nChunks chun
 Calculating π with 3008 terms in 64 chunks of 47 terms each
 ```
 
-Next we define a method `piBBPdeaPart` that will calculate the sum of `n` terms in the BBPDEA formula, starting at term `offset`.
+Next we define a method `piBBPdeaPart` that will calculate the sum of `n` terms
+in the BBPDEA formula, starting at term `offset`.
 
-```
-  def piBBPdeaPart(offset: Int, n: Int): BigDecimal = {
+```scala
+def piBBPdeaPart(offset: Int, n: Int): BigDecimal = {
 
     def piBBPdeaTermI(i: Int): BigDecimal = {
       BigDecimal(1) / BigDecimal(16).pow(i) * (
-        BigDecimal(4) / (8 * i + 1) -
-        BigDecimal(2) / (8 * i + 4) -
-        BigDecimal(1) / (8 * i + 5) -
-        BigDecimal(1) / (8 * i + 6)
+      BigDecimal(4) / (8 * i + 1) -
+      BigDecimal(2) / (8 * i + 4) -
+      BigDecimal(1) / (8 * i + 5) -
+      BigDecimal(1) / (8 * i + 6)
       )
     }
     println(s"Started @ offset: $offset ")
-    (offset until offset + n).foldLeft((BigDecimal(0))) { case (acc, i) => acc + piBBPdeaTermI(i) }
+    (offset until offset + n).foldLeft((BigDecimal(0))) {
+      case (acc, i) => acc + piBBPdeaTermI(i)
+    }
   }
 ```
 
-Relatively straightforward, and time to tie everything together. Note the presence of a println statement that prints some text just before the calculation of a partial sum starts.
-Let's start by launching the calculation of the sum of the chunks:
+Relatively straightforward, and time to tie everything together. Note the
+presence of a println statement that prints some text just before the
+calculation of a partial sum starts.  Let's start by launching the calculation
+of the sum of the chunks:
 
 ```scala
-  val piChunks: Future[Seq[BigDecimal]] = Future.sequence( offsets map { offset => 
-                                                             Future(piBBPdeaPart(offset, chunkSize))} )
+val piChunks: Future[Seq[BigDecimal]] = Future.sequence(offsets.map { offset =>
+  Future(piBBPdeaPart(offset, chunkSize))
+})
 ```
 
-Two things are important to note. First we map each offset in `offsets` to a Future[BigDecimal]; each instance will be scheduled for execution within an execution context (that we haven't provided yet). What we end up with is a sequence of Futures. Secondly, `Future.sequence` converts the `Seq[Future[BigDecimal]]` into a `Future[Seq[BigDecimal]]`. Pretty awesome.
+Two things are important to note. First we map each offset in `offsets` to a
+Future[BigDecimal]; each instance will be scheduled for execution within an
+execution context (that we haven't provided yet). What we end up with is a
+sequence of Futures. Secondly, `Future.sequence` converts the
+`Seq[Future[BigDecimal]]` into a `Future[Seq[BigDecimal]]`. Pretty awesome.
 
-What remains to be done is to calculate the sum of the partial sums. We can do this as follows:
+What remains to be done is to calculate the sum of the partial sums. We can do
+this as follows:
 
 ```scala
-  val piF: Future[BigDecimal] = piChunks map { case chunks => 
-                                   chunks.foldLeft(BigDecimal(0)) { case (acc, chunk) => acc + chunk }
-                                             }
+val piF: Future[BigDecimal] = piChunks.map {
+  case chunks =>
+    chunks.foldLeft(BigDecimal(0)) { case (acc, chunk) => acc + chunk }
 ```
 
-If the previous was awesome, this certainly is awesome++. Think about it: we're performing a calculation on a Future, but it sure looks as if we're working on the concrete thing: `piChunks` is a `Future[Seq[BigDecimal]]`.
+If the previous was awesome, this certainly is awesome++. Think about it: we're
+performing a calculation on a Future, but it sure looks as if we're working on
+the concrete thing: `piChunks` is a `Future[Seq[BigDecimal]]`.
 
-When we apply map on this future, we can work with a lambda that works on a `Seq[BigDecimal]`.
+When we apply map on this future, we can work with a lambda that works on a
+`Seq[BigDecimal]`.
 
 The relevant (simplified) part in the source code of `Future` is as follows:
 
@@ -155,13 +227,15 @@ The relevant (simplified) part in the source code of `Future` is as follows:
 trait Future[+T] extends Awaitable[T] {
   ...
   def map[S](f: T => S): Future[S] = {
-    ...
+  ...
   }
   ...
 }
 ```
 
-Variable `piF` is still a `Future[BigDecimal]`. So, if we want to have the final result, we can in this case do nothing else but wait for the calculation to complete. This is done as follows:
+Variable `piF` is still a `Future[BigDecimal]`. So, if we want to have the final
+result, we can in this case do nothing else but wait for the calculation to
+complete. This is done as follows:
 
 ```scala
 import scala.concurrent.duration.Duration.Inf
@@ -171,18 +245,19 @@ val pi: BigDecimal = Await.result(piF, Inf)
 Execution context and thread pools
 ----------------------------------
 
-The above code contains almost everything that is needed. However, if we compile it, we get the following error:
+The above code contains almost everything that is needed. However, if we compile
+it, we get the following error:
 
 ```
 Error:(54, 64) not enough arguments for method apply: (implicit executor: scala.concurrent.ExecutionContext)scala.concurrent.Future[scala.math.BigDecimal] in object Future.
 Unspecified value parameter executor.
-  val piChunks = Future.sequence( offsets map {offset => Future(piBBPdeaPart(offset, chunkSize))} )
-                                                               ^
+val piChunks = Future.sequence( offsets map {offset => Future(piBBPdeaPart(offset, chunkSize))})
+                                                             ^
 ```
 
 Looking at the (simplified) signature of `Future` we see the following:
 
-```
+```scala
 object Future {
   ...
   def apply[T](body: =>T)(implicit executor: ExecutionContext): Future[T] = ...
@@ -190,32 +265,40 @@ object Future {
 }
 ```
 
-So, we need to provide a so-called ExecutionContext. An ExecutionContext will provide the machinery (Threads) on which the Future code (body in the signature) will be run.
+So, we need to provide an ExecutionContext. An ExecutionContext will
+provide the machinery (Threads) on which the Future code (body in the signature)
+will be run.
 
 We can provide an ExecutionContext in the following way:
 
 ```scala
-  val fjPool = new ForkJoinPool(8)
+val fjPool = new ForkJoinPool(8)
 
-  implicit val ec = ExecutionContext.fromExecutor( fjPool)
+implicit val ec = ExecutionContext.fromExecutor(fjPool)
 ```
 
-Here, we create a ForkJoinPool of 8 threads and create an ExecutionContext from it. Since `ec` is declared as an implicit val, it will be picked-up by our calls to Future.apply...
+Here, we create a ForkJoinPool of 8 threads and create an ExecutionContext from
+it. Since `ec` is declared as an implicit val, it will be picked-up by our calls
+to Future.apply...
 
 Wrap-up
 -------
 
-Following is the complete code, which contains the value of π with 20,000 digit precision (copied from the Internet, so it must be correct ;-) ). Note that in the code below I truncated this value as to make this article not too long).
+Following is the complete code, which contains the value of π with 20,000 digit
+precision (copied from the Internet, so it must be correct ;-) ). Note that in
+the code below I truncated this value as to make this article not too long).
 
 ```scala
-package com.sbi.scalablogs.futures
+package com.lunatech.pi
 
-import scala.math._
-import scala.concurrent._
+import java.math.{MathContext => MC}
+import java.util.concurrent.ForkJoinPool
+import scala.concurrent.Await
+import scala.concurrent.Future
+import scala.concurrent.ExecutionContext
 import scala.concurrent.duration.Duration.Inf
 import scala.concurrent.forkjoin.ForkJoinPool
-import java.math.{ MathContext => MC }
-import scala.math.{ BigDecimal => ScalaBigDecimal}
+import scala.math.{BigDecimal => ScalaBigDecimal}
 
 object Main extends App {
   implicit val mc4000 = new MC(4000)
@@ -230,37 +313,44 @@ object Main extends App {
 
     def piBBPdeaTermI(i: Int): BigDecimal = {
       BigDecimal(1) / BigDecimal(16).pow(i) * (
-          BigDecimal(4) / (8 * i + 1) -
-          BigDecimal(2) / (8 * i + 4) -
-          BigDecimal(1) / (8 * i + 5) -
-          BigDecimal(1) / (8 * i + 6)
-        )
+        BigDecimal(4) / (8 * i + 1) -
+        BigDecimal(2) / (8 * i + 4) -
+        BigDecimal(1) / (8 * i + 5) -
+        BigDecimal(1) / (8 * i + 6))
     }
     println(s"Started @ offset: $offset ")
-    (offset until offset + n).foldLeft((BigDecimal(0))) { case (acc, i) => acc + piBBPdeaTermI(i) }
+    (offset until offset + n).foldLeft((BigDecimal(0))) {
+      case (acc, i) => acc + piBBPdeaTermI(i)
+    }
   }
 
-  val pi20000 = ScalaBigDecimal("3.1415926535897932384626433832795028841971693993751058209749445923...")
+  val pi20000 = ScalaBigDecimal(
+    "3.1415926535897932384626433832795028841971693993751058209749445923..."
+  )
 
   val fjPool = new ForkJoinPool(8)
 
-  implicit val ec = ExecutionContext.fromExecutor( fjPool)
+  implicit val ec = ExecutionContext.fromExecutor(fjPool)
 
   val N = 3000
   val nChunks = 64
   val chunkSize = (N + nChunks - 1) / nChunks
   val offsets = 0 until N by chunkSize
-  println(s"Calculating π with ${nChunks*chunkSize} terms in $nChunks chunks of $chunkSize terms each")
+  println(
+    s"Calculating π with ${nChunks * chunkSize} terms in $nChunks chunks of $chunkSize terms each"
+  )
   println(getImplicitPrecision())
 
   val startTime = System.currentTimeMillis
 
-  val piChunks: Future[Seq[BigDecimal]] = Future.sequence( offsets map { offset => 
-                                                             Future(piBBPdeaPart(offset, chunkSize))} )
+  val piChunks: Future[Seq[BigDecimal]] = Future.sequence(offsets.map {
+    offset => Future(piBBPdeaPart(offset, chunkSize))
+  })
 
-  val piF: Future[BigDecimal] = piChunks map { case chunks => 
-                                   chunks.foldLeft(BigDecimal(0)) { case (acc, chunk) => acc + chunk }
-                                             }
+  val piF: Future[BigDecimal] = piChunks.map {
+    case chunks =>
+      chunks.foldLeft(BigDecimal(0)) { case (acc, chunk) => acc + chunk }
+  }
 
   val pi: BigDecimal = Await.result(piF, Inf)
 
@@ -270,109 +360,141 @@ object Main extends App {
   println(s"Pi Ref:  ${pi20000}")
   val delta = pi - pi20000
   println(s"|Delta|: ${delta(new MC(8)).abs}")
-  println(f"Calculation time: ${1.0/1000 * (stopTime - startTime)}%.2f")
+  println(f"Calculation time: ${1.0 / 1000 * (stopTime - startTime)}%.2f")
 
   fjPool.shutdown()
 }
 ```
 
-When this program is executed on my laptop (a MacBook Pro with an Intel 4-core i7 processor), it produces the following output (values of π truncated):
+When this program is executed on my laptop (a MacBook Pro with an Intel 4-core
+i7 processor), it produces the following output (values of π truncated):
 
 ```
 Calculating π with 3008 terms in 64 chunks of 47 terms each
 precision=4000 roundingMode=HALF_UP
-Started @ offset: 47 
-Started @ offset: 0 
-Started @ offset: 141 
-Started @ offset: 94 
-Started @ offset: 235 
-Started @ offset: 188 
-Started @ offset: 282 
-Started @ offset: 329 
-Started @ offset: 376 
-Started @ offset: 423 
-Started @ offset: 470 
-Started @ offset: 517 
-Started @ offset: 564 
-Started @ offset: 611 
-Started @ offset: 658 
-Started @ offset: 705 
-Started @ offset: 752 
-Started @ offset: 799 
-Started @ offset: 846 
-Started @ offset: 893 
-Started @ offset: 940 
-Started @ offset: 987 
-Started @ offset: 1034 
-Started @ offset: 1081 
-Started @ offset: 1128 
-Started @ offset: 1175 
-Started @ offset: 1222 
-Started @ offset: 1269 
-Started @ offset: 1316 
-Started @ offset: 1363 
-Started @ offset: 1410 
-Started @ offset: 1457 
-Started @ offset: 1504 
-Started @ offset: 1551 
-Started @ offset: 1598 
-Started @ offset: 1645 
-Started @ offset: 1692 
-Started @ offset: 1739 
-Started @ offset: 1786 
-Started @ offset: 1833 
-Started @ offset: 1880 
-Started @ offset: 1927 
-Started @ offset: 1974 
-Started @ offset: 2021 
-Started @ offset: 2068 
-Started @ offset: 2115 
-Started @ offset: 2162 
-Started @ offset: 2209 
-Started @ offset: 2256 
-Started @ offset: 2303 
-Started @ offset: 2350 
-Started @ offset: 2397 
-Started @ offset: 2444 
-Started @ offset: 2491 
-Started @ offset: 2538 
-Started @ offset: 2585 
-Started @ offset: 2632 
-Started @ offset: 2679 
-Started @ offset: 2726 
-Started @ offset: 2773 
-Started @ offset: 2820 
-Started @ offset: 2867 
-Started @ offset: 2914 
+Started @ offset: 47
+Started @ offset: 0
+Started @ offset: 141
+Started @ offset: 94
+Started @ offset: 235
+Started @ offset: 188
+Started @ offset: 282
+Started @ offset: 329
+Started @ offset: 376
+Started @ offset: 423
+Started @ offset: 470
+Started @ offset: 517
+Started @ offset: 564
+Started @ offset: 611
+Started @ offset: 658
+Started @ offset: 705
+Started @ offset: 752
+Started @ offset: 799
+Started @ offset: 846
+Started @ offset: 893
+Started @ offset: 940
+Started @ offset: 987
+Started @ offset: 1034
+Started @ offset: 1081
+Started @ offset: 1128
+Started @ offset: 1175
+Started @ offset: 1222
+Started @ offset: 1269
+Started @ offset: 1316
+Started @ offset: 1363
+Started @ offset: 1410
+Started @ offset: 1457
+Started @ offset: 1504
+Started @ offset: 1551
+Started @ offset: 1598
+Started @ offset: 1645
+Started @ offset: 1692
+Started @ offset: 1739
+Started @ offset: 1786
+Started @ offset: 1833
+Started @ offset: 1880
+Started @ offset: 1927
+Started @ offset: 1974
+Started @ offset: 2021
+Started @ offset: 2068
+Started @ offset: 2115
+Started @ offset: 2162
+Started @ offset: 2209
+Started @ offset: 2256
+Started @ offset: 2303
+Started @ offset: 2350
+Started @ offset: 2397
+Started @ offset: 2444
+Started @ offset: 2491
+Started @ offset: 2538
+Started @ offset: 2585
+Started @ offset: 2632
+Started @ offset: 2679
+Started @ offset: 2726
+Started @ offset: 2773
+Started @ offset: 2820
+Started @ offset: 2867
+Started @ offset: 2914
 Started @ offset: 2961
-Pi:     3.141592653589793238462643383279502884197169399375105820974944592307816406286208998...
+Pi: 3.141592653589793238462643383279502884197169399375105820974944592307816406286208998...
 Pi Ref: 3.141592653589793238462643383279502884197169399375105820974944592307816406286208998...
 |Delta|: 2.8076968E-3630
 Calculation time: 4.02
 ```
 
-What we can observe is that, with 3,003 terms, we have correctly calculated more than 3,600 digits accurately.
+What we can observe is that, with 3,003 terms, we have correctly calculated more
+than 3,600 digits accurately.
 
-If we set the size of the ForkJoinPool to 1, 2, 4, 8, 16, 32 we get the following values for the calculation time (in seconds) respectively: 18.25, 9.23, 5.91, 4.02, 4.47, 5.86
+If we set the size of the ForkJoinPool to 1, 2, 4, 8, 16, 32 we get the
+following values for the calculation time (in seconds) respectively: 18.25,
+9.23, 5.91, 4.02, 4.47, 5.86
 
-So, we see a near linear speed-up by going from one thread to two threads. A further increase of the thread-count doesn't yield a further linear speed-up: this may be caused by different factors, not in the least by the fact that we have a single chip processor with a shared on-chip cache. Of course, since it's a four core CPU (with hyper-threads that don't yield the same performance as the regular CPU threads), we don't get a speed-up beyond 8 threads in the ForkJoinPool. 
+So, we see a near linear speed-up by going from one thread to two threads. A
+further increase of the thread-count doesn't yield a further linear speed-up:
+this may be caused by different factors, not in the least by the fact that we
+have a single chip processor with a shared on-chip cache. Of course, since it's
+a four core CPU (with hyper-threads that don't yield the same performance as the
+regular CPU threads), we don't get a speed-up beyond 8 threads in the
+ForkJoinPool.
 
 Conclusion
 ----------
 
-Scala's `Future` API presents a very powerful way to perform asynchronous and concurrent execution of code. Even though it may take some time to get one's head around, once you grasp it, it's pretty cool and very powerful.
+Scala's `Future` API presents a very powerful way to perform asynchronous and
+concurrent execution of code. Even though it may take some time to get one's
+head around it, when you grasp it, it's pretty cool and very powerful.
 
-Now, as for π, is this a realistic way to calculate this number to say multi-million digit precision? Not really for multiple reasons.
+Now, as for π, is this a realistic way to calculate this number to say
+multi-million digit precision? Not really for multiple reasons.
 
-First of all, consider that the current record holders have calculated 12,100,000,000,050 digits... Because the algorithm shown in this article runs in memory, it wouldn't fit in memory on even the biggest SMP (_Symmetrical Multiprocessing_) computer on the market (memory size limit is in the order of Terra-bytes). Secondly, even if it _would_ fit in memory: as the execution time of the calculation is proportional to the square of the precision used in the calculation, it would take much longer than the time since the big bang occurred to calculate π at this level of precision.
+First of all, consider that the current record holders have calculated
+12,100,000,000,050 digits... Because the algorithm shown in this article runs in
+memory, it wouldn't fit in memory on even the biggest SMP (_Symmetrical
+Multiprocessing_) computer on the market (memory size limit is in the order of
+Terra-bytes). Secondly, even if it _would_ fit in memory: as the execution time
+of the calculation is proportional to the square of the precision used in the
+calculation, it would take much longer than the time since the big bang occurred
+to calculate π at this level of precision.
 
-The record holders, Alexander J. Yee & Shigeru Kondo, calculated (and verified) their result in about 94 days. So, they definitely used a different method. In fact, it's really interesting to read about how they did it using PC type hardware. If you're interested, have a look at the following website.
+The record holders, Alexander J. Yee & Shigeru Kondo, calculated (and verified)
+their result in about 94 days. So, they definitely used a different method. In
+fact, it's really interesting to read about how they did it using PC type
+hardware. If you're interested, have a look at the following website.
 
-[    12.1 Trillion Digits of Pi - And we're out of disk space... By Alexander J. Yee & Shigeru Kondo](http://www.numberworld.org/misc_runs/pi-12t)
+[12.1 Trillion Digits of Pi - And we're out of disk space... By Alexander J.
+Yee & Shigeru Kondo](http://www.numberworld.org/misc_runs/pi-12t)
 
-**PS1:** If the above code is run with `nChunks` set to 8 instead of 1000, the execution time jumps from ~4 seconds to about 7 seconds. Why's that? Well, it turns out that, with the lower number of chunks, the available CPU resources are not used efficiently. In order to find the root cause, you may want to investigate yourself. Run the two cases and observe the CPU utilization during a run  and compare these between the two runs. It has something to do with a property of `BigDecimal`. You may wish to bump the precision used in the calculations to a higher value (e.g. 10,000) to make things better visible. 
+**PS1:** If the above code is run with `nChunks` set to 8 instead of 1000, the
+execution time jumps from ~4 seconds to about 7 seconds. Why's that? Well, it
+turns out that, with the lower number of chunks, the available CPU resources are
+not used efficiently. In order to find the root cause, you may want to
+investigate yourself. Run the two cases and observe the CPU utilization during a
+run and compare these between the two runs. It has something to do with a
+property of `BigDecimal`. You may wish to bump the precision used in the
+calculations to a higher value (e.g. 10,000) to make things better visible.
 
-**PS2:** For those of you who want to play around with the above code; here's π with 20,000 digits:
+**PS2:** For those of you who want to play around with the above code; here's π
+with 20,000 digits:
 
 ```
 3.141592653589793238462643383279502884197169399375105820974944592307816406286208998628034825342117067982148
