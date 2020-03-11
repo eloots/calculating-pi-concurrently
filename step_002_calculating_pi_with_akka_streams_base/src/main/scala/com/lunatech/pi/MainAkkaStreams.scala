@@ -2,6 +2,7 @@ package com.lunatech.pi
 
 import java.math.{MathContext => MC}
 
+import akka.NotUsed
 import akka.actor.ActorSystem
 import akka.stream.scaladsl.{Sink, Source}
 
@@ -43,9 +44,10 @@ object MainAkkaStreams {
 
     val startTime = System.currentTimeMillis
 
-    val sumOfTerms: Sink[BigDecimal, Future[BigDecimal]] = Sink.fold[BigDecimal, BigDecimal](BigDecimal(0)) {
-      case (acc, term) => acc + term
-    }
+    val sumOfTerms: Sink[BigDecimal, Future[BigDecimal]] =
+      Sink.fold[BigDecimal, BigDecimal](BigDecimal(0)) {
+        case (acc, term) => acc + term
+      }
 
     val piF: Future[BigDecimal] = indexes
       .map(piBBPdeaTermI)
