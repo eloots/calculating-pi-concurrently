@@ -2,7 +2,6 @@ package com.lunatech.pi
 
 import java.math.{MathContext => MC}
 
-import akka.NotUsed
 import akka.actor.ActorSystem
 import akka.stream.scaladsl.{Sink, Source}
 
