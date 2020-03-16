@@ -49,7 +49,7 @@ object MainAkkaStreamsMapAsync {
     }
 
     val piF: Future[BigDecimal] = indexes
-      .withMyLogger("pi-term")
+      .myLogger("pi-index")
       .mapAsync(Settings.parallelism)(piBBPdeaTermIF)
       .runWith(sumOfTerms)
 

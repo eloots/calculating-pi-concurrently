@@ -55,14 +55,16 @@ object Helpers {
   }
 
   implicit class LogExt[+A, +M](val flow: Source[A, M]) {
-    def withMyLogger(name: String): Source[A, M] =
+    def myLogger[E](name: String, extract: A => E): Source[A, M] =
       flow
-        .log(name, identity)
+        .log(name, extract)
         .withAttributes(
           Attributes.logLevels(
             onElement = Attributes.LogLevels.Info,
             onFinish = Attributes.LogLevels.Info,
             onFailure = Attributes.LogLevels.Error)
         )
+    def myLogger(name: String): Source[A, M] =
+      myLogger(name, identity)
   }
 }
