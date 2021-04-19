@@ -10,7 +10,7 @@ import scala.math.{BigDecimal as ScalaBigDecimal}
 import scala.util.{Failure, Success}
 
 object MainAkkaStreamsMapAsync:
-  import Helpers._
+  import Helpers.*
 
   def main(args: Array[String]): Unit =
 
