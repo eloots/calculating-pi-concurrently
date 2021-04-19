@@ -28,6 +28,6 @@ object Dependencies {
   val dependencies: Seq[ModuleID] =
     logbackDeps
 
-    val crossDependencies: Seq[ModuleID] =
+  val crossDependencies: Seq[ModuleID] =
     akkaDeps
 }

@@ -1,47 +1,54 @@
 package com.lunatech.pi
 
-import java.math.{MathContext => MC}
+import java.math.{MathContext as MC}
 
 import akka.NotUsed
 import akka.actor.ActorSystem
 import akka.stream.FlowShape
 import akka.stream.scaladsl.{Balance, Flow, GraphDSL, Merge, Sink, Source}
 
-import scala.math.{BigDecimal => ScalaBigDecimal}
+import scala.math.{BigDecimal as ScalaBigDecimal}
 import scala.util.{Failure, Success}
 
 object AkkaStreamsGraph {
-  def main(args: Array[String]): Unit = {
+  def main(args: Array[String]): Unit =
 
-    implicit val system: ActorSystem = akka.actor.ActorSystem("pi-system")
+    given system: ActorSystem = akka.actor.ActorSystem("pi-system")
     import system.dispatcher
 
     val RunParams(iterationCount, precision) = Helpers.getRunParams(args)
 
     Helpers.printMsg(s"Iteration count = $iterationCount - Precision = $precision")
 
-    implicit val prec: MC = new MC(precision)
+    given MC = new MC(precision)
 
-    object BigDecimal {
-      def apply(d: Int)(implicit mc: MC): BigDecimal = ScalaBigDecimal(d, mc)
-    }
+    object BigDecimal:
+      def apply(d: Int)(using mc: MC): BigDecimal = ScalaBigDecimal(d, mc)
 
-    def piBBPdeaTermI(i: Int): BigDecimal = {
+    def piBBPdeaTermI(i: Int): BigDecimal =
       BigDecimal(1) / BigDecimal(16).pow(i) * (
         BigDecimal(4) / (8 * i + 1) -
         BigDecimal(2) / (8 * i + 4) -
         BigDecimal(1) / (8 * i + 5) -
         BigDecimal(1) / (8 * i + 6)
         )
-    }
 
     val indexes = Source(iterationCount to 0 by -1)
 
     val termProcessor: Flow[Int, BigDecimal, NotUsed] =
         Flow.fromFunction[Int, BigDecimal](n => piBBPdeaTermI(n))
 
-    val parallelPiTermProcessor: Flow[Int, BigDecimal, NotUsed] = Flow.fromGraph(GraphDSL.create() { implicit builder =>
-      import GraphDSL.Implicits._
+    /**
+     * As an experiment, run the calculations asynchronously on 12 term-processors and
+     * a custom dispatcher. We're using the Akka Stream graph DSL to 'balance' the
+     * incoming stream of term indexes to 12 'sub' streams that are processed by a
+     * term-processor after which the results are merged back into a single stream
+     * Note that this is not a very practical approach as this is hard-coding the
+     * level of parallelism
+     */
+    val parallelPiTermProcessor: Flow[Int, BigDecimal, NotUsed] = Flow.fromGraph(GraphDSL.create() { builder =>
+      given akka.stream.scaladsl.GraphDSL.Builder[NotUsed] = builder
+      import GraphDSL.Implicits.*
 
       val dispatcher = builder.add(Balance[Int](12))
       val merger = builder.add(Merge[BigDecimal](12))
@@ -62,7 +69,7 @@ object AkkaStreamsGraph {
     })
 
     Helpers.printMsg(s"Calculating π with $iterationCount terms")
-    Helpers.printMsg(s"BigDecimal precision settings: ${implicitly[MC]}")
+    Helpers.printMsg(s"BigDecimal precision settings: ${summon[MC]}")
 
     val startTime = System.currentTimeMillis
 
@@ -70,7 +77,7 @@ object AkkaStreamsGraph {
       acc + term}
 
     val piF = indexes
-      .via(parallelPiTermProcessor)
+      .via(parallelPiTermProcessor).async
       .runWith(sumOfTerms)
 
     piF.onComplete {
@@ -85,5 +92,4 @@ object AkkaStreamsGraph {
         println(s"An error occurred: ${e}")
         system.terminate()
     }
-  }
 }

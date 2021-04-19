@@ -1,44 +1,42 @@
 package com.lunatech.pi
 
-import java.math.{MathContext => MC}
+import java.math.{MathContext as MC}
 
 import akka.actor.ActorSystem
 import akka.stream.scaladsl.{Sink, Source}
 
 import scala.concurrent.Future
-import scala.math.{BigDecimal => ScalaBigDecimal}
+import scala.math.{BigDecimal as ScalaBigDecimal}
 import scala.util.{Failure, Success}
 
-object MainAkkaStreamsMapAsync {
+object MainAkkaStreamsMapAsync:
 
-  def main(args: Array[String]): Unit = {
+  def main(args: Array[String]): Unit =
 
-    implicit val system: ActorSystem = akka.actor.ActorSystem("pi-system")
+    given system: ActorSystem = akka.actor.ActorSystem("pi-system")
     import system.dispatcher
 
     val RunParams(iterationCount, precision) = Helpers.getRunParams(args)
 
     Helpers.printMsg(s"Iteration count = $iterationCount - Precision = $precision")
 
-    implicit val prec: MC = new MC(precision)
+    given MC = new MC(precision)
 
-    object BigDecimal {
-      def apply(d: Int)(implicit mc: MC): BigDecimal = ScalaBigDecimal(d, mc)
-    }
+    object BigDecimal:
+      def apply(d: Int)(using mc: MC): BigDecimal = ScalaBigDecimal(d, mc)
 
-    def piBBPdeaTermIF(i: Int): Future[BigDecimal] = Future {
+    def piBBPdeaTermI(i: Int): BigDecimal =
       BigDecimal(1) / BigDecimal(16).pow(i) * (
         BigDecimal(4) / (8 * i + 1) -
-          BigDecimal(2) / (8 * i + 4) -
-          BigDecimal(1) / (8 * i + 5) -
-          BigDecimal(1) / (8 * i + 6)
+        BigDecimal(2) / (8 * i + 4) -
+        BigDecimal(1) / (8 * i + 5) -
+        BigDecimal(1) / (8 * i + 6)
         )
-    }
 
     val indexes = Source(iterationCount to 0 by -1)
 
     Helpers.printMsg(s"Calculating π with $iterationCount terms")
-    Helpers.printMsg(s"BigDecimal precision settings: ${implicitly[MC]}")
+    Helpers.printMsg(s"BigDecimal precision settings: ${summon[MC]}")
     Helpers.printMsg(s"Memory size to encode BigDecimal at precision=${precision} = ${36 + math.ceil(precision * math.log(10)/8.0)} bytes")
 
     val startTime = System.currentTimeMillis
@@ -48,7 +46,7 @@ object MainAkkaStreamsMapAsync {
     }
 
     val piF: Future[BigDecimal] = indexes
-      .mapAsync(Settings.parallelism)(piBBPdeaTermIF)
+      .mapAsync(Settings.parallelism)(i => Future(piBBPdeaTermI(i)))
       .runWith(sumOfTerms)
 
     piF.onComplete {
@@ -63,5 +61,3 @@ object MainAkkaStreamsMapAsync {
         println(s"An error occurred: ${e}")
         system.terminate()
     }
-  }
-}
