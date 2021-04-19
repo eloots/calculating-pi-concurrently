@@ -14,7 +14,7 @@ import sbt._
 
 Global / onChangedBuildSource := ReloadOnSourceChanges
 
-lazy val `base` = (project in file("."))
+lazy val `calculating-pi-main` = (project in file("."))
   .aggregate(
     common,
     `step_001_calculating_pi_with_futures`,
