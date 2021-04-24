@@ -3,7 +3,7 @@ package com.lunatech.pi
 import java.math.{MathContext as MC}
 
 import akka.actor.ActorSystem
-import akka.stream.scaladsl.{Sink, Source}
+import akka.stream.scaladsl.{Sink, Flow, Source}
 
 import scala.concurrent.Future
 import scala.math.{BigDecimal as ScalaBigDecimal}
@@ -39,18 +39,22 @@ object AkkaStreamsSubStreams:
     Helpers.printMsg(s"Memory size to encode BigDecimal at precision=${precision} = ${36 + math.ceil(precision * math.log(10)/8.0)} bytes")
 
     val startTime = System.currentTimeMillis
-
-    val sumOfTerms: Sink[BigDecimal, Future[BigDecimal]] =
-      Sink.fold[BigDecimal, BigDecimal](BigDecimal(0)) {
+    
+    val calculateSum = 
+      Flow[BigDecimal].fold(BigDecimal(0)){
         case (acc, term) => acc + term
       }
 
+    // A key generator which cycles through the sequence 0, 1, ..., Settings.parallelism
+    val genKey: Int => Int = (index: Int) => index % Settings.parallelism
+
     val piF: Future[BigDecimal] = indexes
-      .groupBy(Settings.parallelism, _ % Settings.parallelism)
-      .map(piBBPdeaTermI).async
-      .fold(BigDecimal(0)){case (acc, term) => acc + term}
+      .groupBy(maxSubstreams = Settings.parallelism, genKey)
+      .map(index => piBBPdeaTermI(index)).async
+      .via(calculateSum)
       .mergeSubstreams
-      .runWith(sumOfTerms)
+      .via(calculateSum)
+      .runWith(Sink.head)
 
     piF.onComplete {
       case Success(pi) =>
