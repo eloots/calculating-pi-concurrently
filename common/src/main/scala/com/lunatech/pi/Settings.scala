@@ -7,3 +7,4 @@ object Settings:
 
   val parallelism: Int = config.getInt("calculating-pi.parallelism")
   val piReferenceFile: String = config.getString("calculating-pi.pi-reference-file")
+  val BPP_chunks: Int = config.getInt("calculating-pi.bpp-chunks")
