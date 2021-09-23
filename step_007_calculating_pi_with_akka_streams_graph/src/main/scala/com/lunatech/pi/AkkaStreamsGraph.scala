@@ -46,8 +46,8 @@ object AkkaStreamsGraph {
      * Note that this is not a very practical approach as this is hard-coding the
      * level of parallelism
      */
-    val parallelPiTermProcessor: Flow[Int, BigDecimal, NotUsed] = Flow.fromGraph(GraphDSL.create() { builder =>
-      given akka.stream.scaladsl.GraphDSL.Builder[NotUsed] = builder
+    val parallelPiTermProcessor: Flow[Int, BigDecimal, NotUsed] = Flow.fromGraph(GraphDSL.create() { builder => given builder.type = builder
+
       import GraphDSL.Implicits.*
 
       val dispatcher = builder.add(Balance[Int](12))

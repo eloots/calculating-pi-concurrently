@@ -39,7 +39,7 @@ object Main:
 
     val fjPool = new ForkJoinPool(Settings.parallelism)
 
-    given ExecutionContextExecutor = ExecutionContext.fromExecutor(fjPool)
+    given ExecutionContext = ExecutionContext.fromExecutor(fjPool)
 
     // val N = iterationCount
     // val nChunks = 64
